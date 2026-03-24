@@ -1,0 +1,204 @@
+# lecture6 — Character-level GPT Codemap
+
+## Project Purpose
+Educational character-level GPT trained on Tiny Shakespeare. Clarity over performance — every component maps directly to theory.
+
+---
+
+## File Map
+
+| File | Role | Key Exports |
+|---|---|---|
+| `gpt.py` | Model architecture only — no I/O, no training | `GPTLanguageModel`, `Block`, `MultiHeadAttention`, `Head`, `FeedFoward` |
+| `train.py` | CLI entry point; wires all components | `train()`, argparse CLI |
+| `util.py` | Tokenization + dataset batching | `CharacterTokenizer`, `Dataset` |
+| `loss.py` | Validation loss estimation (no_grad) | `estimate_loss()` |
+| `metrics.py` | ROUGE, BERTScore, perplexity, masked accuracy | `Metrics` |
+
+---
+
+## Class & Function Reference
+
+### `gpt.py`
+
+```
+Head(head_size, n_embd, context_size)           [line 6]
+  .forward(x, kv_cache=None) → (out, new_cache) [line 15]
+  Buffers: tril (causal mask)
+
+MultiHeadAttention(num_heads, head_size, n_embd, context_size) [line 40]
+  .forward(x, kv_cache=None) → (out, new_caches) [line 47]
+  Children: heads (ModuleList[Head]), proj (Linear), dropout
+
+FeedFoward(n_embd)                              [line 58]
+  .forward(x) → x                               [line 68]
+  Net: Linear(n_embd → 4*n_embd) → ReLU → Linear(4*n_embd → n_embd) → Dropout
+
+Block(n_embd, n_head, context_size)             [line 72]
+  .forward(x, kv_cache=None) → (x, new_cache)  [line 82]
+  Pre-LN: ln1 → sa (MultiHeadAttention) → residual
+          ln2 → ffwd (FeedFoward)        → residual
+
+GPTLanguageModel(vocab_size, n_embd, context_size, n_head, n_layer) [line 89]
+  .forward(idx, targets=None, use_cache=False, kv_cache=None)       [line 139]
+    → (logits, loss)           if use_cache=False
+    → (logits, loss, caches)   if use_cache=True
+  .generate(start_idx, number_of_tokens, use_cache=False)           [line 101]
+    → idx tensor (B, T + number_of_tokens)
+  Embeddings: token_embedding_table, position_embedding_table
+  Stack: blocks (ModuleList[Block] × n_layer) → ln_f → lm_head
+```
+
+### `util.py`
+
+```
+CharacterTokenizer(content: str)                [line 4]
+  .vocab        → sorted list of unique chars
+  .char_to_idx  → dict[char, int]
+  .idx_to_char  → dict[int, char]
+  .encode(text) → list[int]                     [line 10]
+  .decode(ids)  → str                           [line 13]
+
+Dataset(content: Tensor, context_size, batch_size, split_factor=0.9) [line 17]
+  .train_data   → data[:90%]
+  .val_data     → data[90%:]
+  .get_batch(split, device, y_shift=1)          [line 26]
+    → (x, y) each shape (batch_size, context_size)
+    y is x shifted right by y_shift (next-token prediction)
+```
+
+### `loss.py`
+
+```
+estimate_loss(data, model, eval_iters=100)      [line 5]
+  @torch.no_grad()
+  Averages cross-entropy over eval_iters batches per split
+  → {'train': float, 'val': float}
+```
+
+### `metrics.py`
+
+```
+Metrics(number_of_steps=5, mask_ratio=0.15)     [line 5]
+  .__call__(data, model, tokenizer)             [line 59]
+    @torch.no_grad(); runs .step() number_of_steps times, averages
+    → {'perplexity', 'rouge1', 'rougeL', 'bertscore', 'masked_accuracy'}
+  .step(data, model, tokenizer)                 [line 14]
+    1. Perplexity  — exp(cross_entropy) on val batch
+    2. ROUGE-1/L   — generate gen_len tokens from prompt half, compare to reference half
+    3. BERTScore   — same generated vs reference, semantic F1
+    4. Masked acc  — argmax prediction vs target at 15% random positions
+```
+
+### `train.py`
+
+```
+train(data, model, tokenizer, steps, report_frequency, lr) [line 13]
+  AdamW optimizer, lr default 1e-3
+  Every report_frequency steps: estimate_loss + Metrics
+CLI flags (global, before subcommand):
+  --input, --seed, --context-size, --batch-size,
+  --n-embd, --n-head, --n-layer, --dropout
+Subcommands:
+  train  --steps --save --report --lr
+  eval   --load  --prompt --token-count
+```
+
+---
+
+## Data Flow
+
+```
+input.txt
+  └─► CharacterTokenizer        (util.py:4)
+        vocab, encode/decode
+  └─► torch.tensor(encode(...)) (train.py:78)
+        1-D LongTensor of token indices
+  └─► Dataset                   (util.py:17)
+        train/val split 90/10
+        get_batch → (B, T) x and y tensors
+
+(B, T) x
+  └─► GPTLanguageModel.forward  (gpt.py:139)
+        token_emb + pos_emb → x (B,T,n_embd)
+        for each Block:
+          LayerNorm → MultiHeadAttention → + residual
+          LayerNorm → FeedFoward         → + residual
+        ln_f → lm_head → logits (B,T,vocab_size)
+        cross_entropy(logits, targets) → scalar loss
+
+loss → optimizer.step()         (train.py:24)
+```
+
+---
+
+## KV-Cache Logic (generation only)
+
+```
+generate() loop per new token:
+  if cache exists AND cache length < context_size:
+    feed only last token: idx[:, -1:]    O(1) attention
+  else:
+    feed full window: idx[:, -context_size:]
+    rebuild cache from scratch
+
+Head.forward with kv_cache:
+  k = cat([k_prev, k_new], dim=1)
+  v = cat([v_prev, v_new], dim=1)
+  causal mask applied to new query rows only
+```
+
+---
+
+## Hyperparameter Shapes
+
+| Param | Default | Affects |
+|---|---|---|
+| `vocab_size` | derived from input | token_embedding_table rows |
+| `n_embd` | 384 | embedding dim throughout |
+| `n_head` | 6 | number of attention heads |
+| `n_layer` | 6 | number of Block layers |
+| `context_size` | 256 | position_embedding_table rows; tril buffer size |
+| `batch_size` | 32 | get_batch output |
+| `dropout` | 0.2 | all Dropout layers |
+
+`head_size = n_embd // n_head` (computed, not a CLI arg)
+
+---
+
+## Critical Constraints
+
+- **Vocab is NOT saved in the checkpoint.** Always pass the same `--input` file used during training.
+- `context_size`, `n_embd`, `n_head`, `n_layer` must match the checkpoint — they define weight shapes.
+- Global flags go **before** the subcommand: `python train.py [GLOBAL] train [TRAIN_FLAGS]`
+
+---
+
+## Common Commands
+
+```bash
+# Train from scratch
+python train.py --input input.txt train --steps 5000 --save model.pth
+
+# Eval / generate
+python train.py --input input.txt eval --load tinyshakespeare_model_5000steps.pth
+
+# With prompt
+python train.py --input input.txt eval --load tinyshakespeare_model_5000steps.pth \
+  --prompt "ROMEO: " --token-count 500
+
+# Small model
+python train.py --input input.txt \
+  --n-embd 128 --n-head 4 --n-layer 4 --context-size 128 \
+  train --steps 3000 --save small_model.pth
+```
+
+---
+
+## Dependencies
+
+```
+torch
+numpy
+evaluate    # pip install evaluate  (ROUGE + BERTScore in metrics.py)
+```
