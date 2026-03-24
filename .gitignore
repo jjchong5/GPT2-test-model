@@ -22,3 +22,6 @@ medical_dialog.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code local settings (contains personal API keys)
+.claude/
