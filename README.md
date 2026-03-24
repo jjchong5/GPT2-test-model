@@ -323,9 +323,16 @@ Also works on Google Colab (T4 GPU, free tier).
 
 ```bash
 python prepare_medical_dialog.py
-# Source: knowrohit07/know_medical_dialogue_v2 on HuggingFace
-# Columns: instruction (patient question) + output (doctor response)
 ```
+
+**Source dataset:** [`knowrohit07/know_medical_dialogue_v2`](https://huggingface.co/datasets/knowrohit07/know_medical_dialogue_v2) on HuggingFace
+
+- ~6,000 rows of real Reddit doctor-patient Q&A interactions
+- Columns: `instruction` (patient question) + `output` (doctor response)
+- Covers a wide range of conditions: cardiology, neurology, dermatology, psychiatry, and general medicine
+- Scraped from Reddit's medical advice communities; responses are from users claiming medical expertise — not verified clinical advice
+
+> **Larger dataset option:** [`UCSD26/medical_dialog`](https://huggingface.co/datasets/UCSD26/medical_dialog) contains ~11 million doctor-patient interactions — nearly 2000× more data. This dataset currently requires `datasets < 3.0` due to a legacy script format. See Future Work below.
 
 ---
 
@@ -375,6 +382,10 @@ Improvements roughly ordered by impact-to-effort ratio:
 - **Context size 512** — 512 BPE tokens ≈ a full doctor-patient exchange in context. Currently 256 ≈ 150 words. Halve batch size to fit in GPU memory.
 - **Larger BPE vocabulary (4000–8000)** — fewer tokens per sequence, more semantic precision per token.
 - **Direct Preference Optimization (DPO)** — a simpler alternative to RLHF that doesn't require a separate reward model. Given pairs of (good response, bad response), trains the model to prefer the good one.
+
+### High impact, low effort (data side)
+- **Explicit Doctor/Patient label formatting** — prepend each turn with `[Patient]` / `[Doctor]` tags before training. Currently the model sees unstructured dialogue and must infer roles implicitly. Explicit labels would produce cleaner, role-aware outputs and make prompted generation more reliable (e.g. `"[Patient] I have chest pain. [Doctor]"` reliably completes a doctor turn).
+- **Scale up data: [`UCSD26/medical_dialog`](https://huggingface.co/datasets/UCSD26/medical_dialog)** — ~11 million doctor-patient interactions vs. our 6,000. Same Q&A structure, dramatically more coverage. Requires pinning `datasets<3.0` due to a legacy script format. With this data and the same model, expect significantly better medical vocabulary and more coherent responses.
 
 ### Lower impact or higher effort
 - **Mixture of Experts (MoE)** — routes each token to one of N expert feedforward sub-networks. Gives more parameters for the same compute. Pays off at 1B+ parameters; overhead not worth it at our scale.
