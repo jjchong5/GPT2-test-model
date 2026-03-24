@@ -1,0 +1,7 @@
+torch
+numpy
+evaluate
+rouge_score
+bert_score
+datasets
+transformers
