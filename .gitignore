@@ -1,0 +1,24 @@
+# Model checkpoints — large binary files, do not commit
+*.pth
+*.pt
+
+# Sentencepiece tokenizer outputs — regenerated on first run
+*.model
+*.vocab
+
+# Training logs
+training_log*.txt
+nohup.out
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Data (large text file — regenerate with prepare_medical_dialog.py)
+medical_dialog.txt
+
+# OS
+.DS_Store
+Thumbs.db
