@@ -5,3 +5,4 @@ rouge_score
 bert_score
 datasets
 transformers
+sentencepiece
