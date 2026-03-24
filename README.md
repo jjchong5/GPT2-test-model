@@ -218,14 +218,15 @@ All runs use `medical_dialog.txt` (~3MB, ~18,900 lines of Reddit doctor-patient 
 | Char extended | Char | 256/4/4 | 3.2M | 8k | 0.84 | 0.161 | 0.838 | No improvement over 5k |
 | BPE small | BPE-2000 | 256/4/4 | 4.2M | 15k | 2.23* | 0.353 | 0.852 | **2× ROUGE gain** from BPE alone |
 | BPE big | BPE-2000 | 384/6/6 | 12.3M | 20k | 3.46* | 0.356 | 0.856 | Overfit — dropout too low (0.2) |
-| BPE big v3 | BPE-2000 | 384/6/6 | 12.3M | 15k | TBD | TBD | TBD | dropout=0.35 + cosine LR |
+| BPE big v3 | BPE-2000 | 384/6/6 | 12.3M | 15k | **2.22*** | **0.363** | **0.856** | dropout=0.35 + cosine LR; best checkpoint at step 3000 |
 
 *BPE loss not comparable to char loss — different vocab size. See note above.
 
 ### Key findings
 
 - **BPE vs Char:** ROUGE-1 jumped from 0.17 → 0.35 using the same model size. Subword tokenization gives the model 3–4× more context per token, making the biggest single improvement.
-- **Bigger model without regularization:** The 12.3M param model overfit severely (train loss 0.19, val loss 3.46). More dropout (0.35) and cosine LR warmup added in v3.
+- **Bigger model without regularization:** The 12.3M param model overfit severely (train loss 0.19, val loss 3.46 at 20k steps). More dropout (0.35) and cosine LR warmup in v3 delayed overfitting but didn't eliminate it — best val loss was still at step 3000.
+- **ROUGE vs val loss diverge:** In v3, val loss rose after step 3000 but ROUGE-1 kept improving through step 14000 (0.347 → 0.363). Val loss is not the best proxy for generation quality once the model has learned enough structure.
 - **Val < train loss:** Normal when dropout is active during training — not a bug.
 
 ---
@@ -262,6 +263,18 @@ would be a one thing for sure to emetry had a specialist who won't see if there
 was something or was it to worry.
 ```
 *Full words and medical terms used contextually. Sentence structure much more coherent.*
+
+### BPE big v3 — 15k steps (12.3M params, dropout=0.35, cosine LR)
+```
+I've heard the remains span to a ple of tests, and they're showing his blood
+supports that look at the visual processing and not where he doesn't appear
+portal valve. Can't negit himself a bit concerned. He'd give him a lot about
+a second opinion, though if there's no other symptoms and then he'd like to
+do it to see if he's an infection with it. I'd like to try a doctor, basilar
+case there's negate that hasn't go back to the hospital...
+Some discussed Well the naturations come out to be the Lymphoma diagnosis.
+```
+*Most fluent output. Recognizable medical reasoning: "second opinion", "Lymphoma diagnosis", "infection". Grammar still broken but sentence-level structure is coherent.*
 
 ### BPE big — 20k steps (12.3M params, overfit)
 ```
