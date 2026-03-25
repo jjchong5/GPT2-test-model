@@ -2,6 +2,9 @@
 
 A minimal, educational GPT-style transformer trained on Reddit doctor-patient Q&A (`medical_dialog.txt`). Covers the full ML pipeline: data loading, tokenization, training, evaluation, and text generation. Supports both character-level and BPE subword tokenization.
 
+**Try it live:** [HuggingFace Space — GPT2 Medical Dialog](https://huggingface.co/spaces/jjschong/GPT2testing-medicaldata)
+**GitHub:** [jjchong5/GPT2-test-model](https://github.com/jjchong5/GPT2-test-model)
+
 ---
 
 ## Quick Start
