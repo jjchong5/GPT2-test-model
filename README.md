@@ -1,4 +1,6 @@
-# lecture6 — GPT-Style Transformer on Medical Dialog
+# GPT-Style Transformer From Scratch — Medical Dialog
+
+**Headline result:** switching from character-level to BPE tokenization at the same model size roughly doubled ROUGE-1 (0.17 → 0.35); a larger model with stronger regularization reached 0.363 ROUGE-1 / 0.856 BERTScore, and the experiments show where it overfits and why validation loss is a poor proxy for generation quality (see [Training Experiments](#training-experiments)).
 
 A minimal, educational GPT-style transformer trained on Reddit doctor-patient Q&A (`medical_dialog.txt`). Covers the full ML pipeline: data loading, tokenization, training, evaluation, and text generation. Supports both character-level and BPE subword tokenization.
 
@@ -36,7 +38,7 @@ python train.py \
 ## Project Structure
 
 ```
-lecture6/
+gpt2-test-model/
 ├── gpt.py                   # Model architecture (Head, MultiHeadAttention, Block, GPTLanguageModel)
 ├── train.py                 # CLI entry point — training and inference
 ├── util.py                  # CharacterTokenizer, BPETokenizer, Dataset
